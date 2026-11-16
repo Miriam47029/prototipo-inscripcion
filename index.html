@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Prototipo planificador de inscripción</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&display=swap" rel="stylesheet">
+<style>
+:root{
+  /* Planificador de inscripción: barra de pasos arriba, una tarea por pantalla, estado siempre visible */
+  --ink:#16233b; --muted:#5b6578; --line:#d9dfe9; --surface:#ffffff; --canvas:#f2f4f8;
+  --accent:#1f5bd1; --accent-soft:#e7eefc;
+  --ok:#1e7a4f; --ok-soft:#e3f3ea; --warn:#9a6205; --warn-soft:#fbf0d9; --bad:#b3362f; --bad-soft:#fbe5e3;
+  --display:"Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --body:"Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif;
+  --mono:ui-monospace, "Cascadia Mono", Consolas, monospace;
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--canvas);color:var(--ink);font:16px/1.5 var(--body)}
+h1,h2,h3{font-family:var(--display);line-height:1.2;margin:0;text-wrap:balance}
+h1{font-size:1.5rem} h2{font-size:1.25rem} h3{font-size:1.05rem}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.num{font-variant-numeric:tabular-nums}
+.proto-bar{background:var(--ink);color:#fff;font-size:.85rem;display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;justify-content:space-between;padding:8px 16px}
+.proto-bar .seg{display:inline-flex;border:1px solid #ffffff55;border-radius:8px;overflow:hidden}
+.proto-bar .seg button{background:transparent;border:0;color:#fff;padding:4px 10px}
+.proto-bar .seg button[aria-pressed="true"]{background:#fff;color:var(--ink);font-weight:700}
+.proto-bar .lnk{background:transparent;border:1px solid #ffffff55;border-radius:8px;color:#fff;padding:4px 10px}
+header.app{background:var(--surface);border-bottom:1px solid var(--line);padding:14px 16px;display:flex;flex-wrap:wrap;gap:12px 24px;align-items:center;justify-content:space-between}
+.brand{display:flex;flex-direction:column}
+.brand small{color:var(--muted)}
+.search{position:relative;flex:1 1 280px;max-width:420px}
+.search input{width:100%;padding:9px 12px 9px 36px;border:1px solid var(--line);border-radius:10px;background:var(--canvas)}
+.search svg{position:absolute;left:11px;top:11px}
+.search ul{position:absolute;z-index:20;top:44px;left:0;right:0;margin:0;padding:6px;list-style:none;background:var(--surface);border:1px solid var(--line);border-radius:10px;box-shadow:0 10px 24px #16233b22}
+.search li button{width:100%;text-align:left;background:none;border:0;padding:8px 10px;border-radius:8px}
+.search li button:hover,.search li button:focus-visible{background:var(--accent-soft)}
+.search li small{color:var(--muted);display:block}
+.user{font-size:.9rem;color:var(--muted);text-align:right}
+.user b{color:var(--ink)}
+.banner{display:flex;gap:12px;align-items:center;justify-content:space-between;background:var(--warn-soft);color:#5d3c03;padding:10px 16px;font-size:.92rem;border-bottom:1px solid #ecd9ad}
+.banner button{background:none;border:1px solid #c9a75f;border-radius:8px;padding:2px 10px}
+main{max-width:1120px;margin:0 auto;padding:20px 16px 120px;display:grid;gap:20px}
+.stepper{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin:0;padding:0;list-style:none}
+.stepper button{width:100%;height:100%;display:flex;gap:10px;align-items:center;text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 12px}
+.stepper .n{flex:none;width:28px;height:28px;border-radius:50%;display:grid;place-items:center;font-weight:700;background:var(--canvas);border:1px solid var(--line)}
+.stepper .t{display:flex;flex-direction:column;font-size:.92rem;line-height:1.25}
+.stepper .t small{color:var(--muted)}
+.stepper .cur button{border-color:var(--accent);box-shadow:inset 0 -3px 0 var(--accent)}
+.stepper .cur .n{background:var(--accent);color:#fff;border-color:var(--accent)}
+.stepper .done .n{background:var(--ok);color:#fff;border-color:var(--ok)}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px;display:grid;gap:14px;align-content:start}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.between{justify-content:space-between}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+.muted{color:var(--muted)}
+.btn{border:1px solid var(--accent);background:var(--accent);color:#fff;border-radius:10px;padding:9px 16px;font-weight:700}
+.btn.sec{background:var(--surface);color:var(--accent)}
+.btn.ghost{border-color:var(--line);background:var(--surface);color:var(--ink);font-weight:400}
+.btn.sm{padding:5px 10px;font-size:.88rem}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.pill{display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:2px 10px;font-size:.84rem;font-weight:700;white-space:nowrap}
+.pill.ok{background:var(--ok-soft);color:var(--ok)} .pill.warn{background:var(--warn-soft);color:var(--warn)} .pill.bad{background:var(--bad-soft);color:var(--bad)} .pill.info{background:var(--accent-soft);color:var(--accent)}
+.pill i{width:8px;height:8px;border-radius:50%;background:currentColor}
+.tbl-wrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:.93rem}
+th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
+th{font-size:.8rem;text-transform:uppercase;letter-spacing:.03em;color:var(--muted);font-weight:700}
+tr.full td{color:var(--muted)}
+.filters{display:flex;flex-wrap:wrap;gap:12px;align-items:end}
+.filters label{display:grid;gap:4px;font-size:.85rem;color:var(--muted)}
+.filters select,.filters input[type=text]{padding:7px 10px;border:1px solid var(--line);border-radius:8px;background:var(--surface);min-width:170px}
+.chk{display:flex!important;flex-direction:row;align-items:center;gap:6px;color:var(--ink)!important}
+.notice{border-radius:12px;padding:12px 14px;display:grid;gap:8px;border:1px solid}
+.notice.bad{background:var(--bad-soft);border-color:#efc2bd}
+.notice.warn{background:var(--warn-soft);border-color:#ecd9ad}
+.notice.ok{background:var(--ok-soft);border-color:#b8dfc9}
+.notice.info{background:var(--accent-soft);border-color:#c6d6f7}
+.notice code{font-family:var(--mono);font-size:.8rem;color:var(--muted)}
+details.help{display:inline-block;position:relative}
+details.help summary{list-style:none;display:inline-grid;place-items:center;width:20px;height:20px;border-radius:50%;border:1px solid var(--accent);color:var(--accent);font-size:.75rem;font-weight:700;cursor:pointer}
+details.help summary::-webkit-details-marker{display:none}
+details.help[open] div{position:absolute;z-index:15;top:26px;left:-10px;width:280px;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 12px;box-shadow:0 10px 24px #16233b22;font-size:.88rem;font-weight:400;text-transform:none;letter-spacing:0;color:var(--ink)}
+.week{display:grid;grid-template-columns:52px repeat(5,1fr);border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--surface);font-size:.8rem}
+.week .hd{background:var(--canvas);text-align:center;padding:6px 0;font-weight:700;border-bottom:1px solid var(--line)}
+.week .col{position:relative;border-left:1px solid var(--line);height:calc(var(--hours) * 30px);background:repeating-linear-gradient(to bottom,transparent 0 29px,#eef1f6 29px 30px)}
+.week .hrs{position:relative;height:calc(var(--hours) * 30px)}
+.week .hrs span{position:absolute;right:6px;transform:translateY(-6px);color:var(--muted)}
+.blk{position:absolute;left:3px;right:3px;border-radius:7px;padding:3px 6px;line-height:1.2;overflow:hidden;color:#fff;font-weight:700}
+.blk small{display:block;font-weight:400;opacity:.9}
+.blk.clash{outline:3px solid var(--bad);outline-offset:-3px}
+.tabs{display:inline-flex;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.tabs button{border:0;background:var(--surface);padding:7px 14px}
+.tabs button[aria-selected="true"]{background:var(--accent);color:#fff;font-weight:700}
+.list{display:grid;gap:8px;margin:0;padding:0;list-style:none}
+.list li{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;justify-content:space-between;border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.sw{width:12px;height:12px;border-radius:3px;display:inline-block;margin-right:6px;vertical-align:-1px}
+.timeline{display:grid;grid-template-columns:repeat(3,1fr);gap:0;margin:0;padding:0;list-style:none}
+.timeline li{position:relative;padding-top:30px;text-align:center;font-size:.9rem}
+.timeline li::before{content:"";position:absolute;top:9px;left:0;right:0;height:3px;background:var(--line)}
+.timeline li:first-child::before{left:50%} .timeline li:last-child::before{right:50%}
+.timeline li span{position:absolute;top:0;left:50%;transform:translateX(-50%);width:22px;height:22px;border-radius:50%;background:var(--surface);border:3px solid var(--line)}
+.timeline li.on span{background:var(--ok);border-color:var(--ok)} .timeline li.on::before{background:var(--ok)}
+.timeline small{display:block;color:var(--muted)}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:6px 16px;margin:0}
+.kv dt{color:var(--muted)} .kv dd{margin:0;font-weight:700}
+.preview{max-width:220px;max-height:160px;border:1px solid var(--line);border-radius:8px}
+.overlay{position:fixed;inset:0;background:#16233b88;display:grid;place-items:center;padding:16px;z-index:40}
+.modal{background:var(--surface);border-radius:16px;max-width:560px;width:100%;padding:20px;display:grid;gap:14px;max-height:90vh;overflow:auto}
+.mod-panel{position:fixed;right:12px;bottom:12px;z-index:30;width:300px;max-width:calc(100% - 24px);background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:0 10px 30px #16233b2e;font-size:.85rem}
+.mod-panel summary{padding:8px 12px;cursor:pointer;font-weight:700}
+.mod-panel .in{padding:0 12px 12px;display:grid;gap:8px}
+.mod-panel ol{margin:0;padding-left:18px;max-height:140px;overflow:auto;color:var(--muted)}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;text-align:center}
+.stats div{background:var(--canvas);border-radius:8px;padding:6px}
+.stats b{display:block;font-size:1.1rem}
+/* Condición A: interfaz actual simulada */
+.legacy{font-family:Arial,Helvetica,sans-serif;font-size:13px;background:#fff;color:#000;max-width:1120px;margin:0 auto;padding:16px}
+.legacy h2{font-family:Arial,Helvetica,sans-serif;font-size:17px;color:#00305e;border-bottom:2px solid #00305e;padding-bottom:4px;margin-bottom:10px}
+.legacy table{font-size:12px;width:auto}
+.legacy th{background:#d7dde6;color:#000;text-transform:none;letter-spacing:0;font-size:12px;border:1px solid #9aa5b5}
+.legacy td{border:1px solid #c4ccd8;padding:4px 8px}
+.legacy input{width:72px;padding:2px 4px;border:1px solid #8a8a8a;font-family:Arial;font-size:12px}
+.legacy .lbtn{background:#e6e6e6;border:1px solid #8a8a8a;padding:3px 10px;font-size:12px;font-family:Arial}
+.legacy a{color:#0645ad;text-decoration:underline;cursor:pointer}
+.legacy .err td{color:#b00000}
+.legacy pre{font-family:"Courier New",monospace;font-size:12px;background:#fafafa;border:1px solid #ccc;padding:8px;overflow:auto}
+@media (max-width:820px){.stepper{grid-template-columns:1fr 1fr}.grid2{grid-template-columns:1fr}.user{text-align:left}}
+@media (max-width:420px){.stepper{grid-template-columns:1fr}}
+@media (prefers-reduced-motion:no-preference){.btn,.stepper button{transition:background .15s,box-shadow .15s}}
+</style>
+</head>
+<body>
+<div class="proto-bar" role="region" aria-label="Controles del prototipo">
+  <span><b>Prototipo académico de usabilidad</b> · datos ficticios · no es un sistema oficial de la BUAP</span>
+  <span class="row">
+    <span class="seg" role="group" aria-label="Condición de la prueba">
+      <button id="cA" data-act="cond" data-v="A">Condición A: proceso actual</button>
+      <button id="cB" data-act="cond" data-v="B">Condición B: propuesta</button>
+    </span>
+    <button class="lnk" data-act="reset">Reiniciar</button>
+  </span>
+</div>
+<div id="root"></div>
+<details class="mod-panel" id="modPanel">
+  <summary>Registro de la sesión (moderador)</summary>
+  <div class="in">
+    <div class="stats">
+      <div><b class="num" id="stT">0:00</b>tiempo</div>
+      <div><b class="num" id="stK">0</b>NRC tecleados</div>
+      <div><b class="num" id="stE">0</b>errores</div>
+    </div>
+    <ol id="stLog"></ol>
+    <div class="row"><button class="btn sm sec" data-act="copylog">Copiar registro</button><span id="copyMsg" class="muted"></span></div>
+  </div>
+</details>
+<script>
+const MATERIAS = {
+  ISW:{n:'Ingeniería de Software', c:'#1f5bd1', pr:1},
+  BDA:{n:'Bases de Datos Avanzadas', c:'#0f7c78', pr:1},
+  RED:{n:'Redes de Computadoras', c:'#8a3fb8', pr:1},
+  SOP:{n:'Sistemas Operativos', c:'#c0561d', pr:2},
+  PYE:{n:'Probabilidad y Estadística', c:'#2e6b2e', pr:2},
+  IHC:{n:'Interacción Humano-Computadora (optativa)', c:'#9b2f5a', pr:3},
+};
+const BASE_GROUPS = [
+  {nrc:10231,m:'ISW',g:'G1',d:['Lu','Mi'],s:7,e:9,p:'Mtra. Laura Méndez',cupo:12,tot:40,salon:'CC-201'},
+  {nrc:10232,m:'ISW',g:'G2',d:['Ma','Ju'],s:11,e:13,p:'Dr. Ramón Ortiz',cupo:3,tot:40,salon:'CC-105'},
+  {nrc:10233,m:'ISW',g:'G3',d:['Lu','Mi'],s:16,e:18,p:'Mtra. Sofía Ruiz',cupo:20,tot:40,salon:'CC-201'},
+  {nrc:10241,m:'BDA',g:'G1',d:['Lu','Mi'],s:9,e:11,p:'Dr. Javier Torres',cupo:8,tot:35,salon:'Lab. 3'},
+  {nrc:10242,m:'BDA',g:'G2',d:['Ma','Ju'],s:7,e:9,p:'Mtra. Elena Castro',cupo:0,tot:35,salon:'Lab. 1'},
+  {nrc:10243,m:'BDA',g:'G3',d:['Ma','Ju'],s:16,e:18,p:'Mtro. Andrés Vega',cupo:15,tot:35,salon:'Lab. 3'},
+  {nrc:10251,m:'RED',g:'G1',d:['Ma','Ju'],s:9,e:11,p:'Dr. Miguel Herrera',cupo:2,tot:30,salon:'Lab. Redes',fills:true},
+  {nrc:10252,m:'RED',g:'G2',d:['Lu','Mi'],s:11,e:13,p:'Mtra. Patricia Luna',cupo:10,tot:30,salon:'Lab. Redes'},
+  {nrc:10253,m:'RED',g:'G3',d:['Vi'],s:7,e:11,p:'Mtro. Carlos Díaz',cupo:18,tot:30,salon:'Lab. Redes'},
+  {nrc:10261,m:'SOP',g:'G1',d:['Lu','Mi'],s:11,e:13,p:'Dr. Fernando Salas',cupo:5,tot:35,salon:'CC-302'},
+  {nrc:10262,m:'SOP',g:'G2',d:['Ma','Ju'],s:13,e:15,p:'Mtra. Gabriela Ríos',cupo:22,tot:35,salon:'CC-302'},
+  {nrc:10271,m:'PYE',g:'G1',d:['Vi'],s:9,e:13,p:'Mtro. Hugo Navarro',cupo:14,tot:40,salon:'CB-110'},
+  {nrc:10272,m:'PYE',g:'G2',d:['Lu','Mi'],s:13,e:15,p:'Dra. Irene Paredes',cupo:0,tot:40,salon:'CB-110'},
+  {nrc:10273,m:'PYE',g:'G3',d:['Ma','Ju'],s:18,e:20,p:'Mtro. Luis Peña',cupo:25,tot:40,salon:'CB-204'},
+  {nrc:10281,m:'IHC',g:'G1',d:['Vi'],s:13,e:16,p:'Dra. Ana Morales',cupo:6,tot:25,salon:'Lab. UX'},
+];
+const DAYS=['Lu','Ma','Mi','Ju','Vi'], DAYN={Lu:'Lunes',Ma:'Martes',Mi:'Miércoles',Ju:'Jueves',Vi:'Viernes'};
+const STEPS=[['Cita y proyección','Tu turno y tus materias'],['Oferta','Grupos con cupo'],['Mis planes','Plan A y Plan B'],['Inscribir','Tu horario final'],['Pago','Estado del trámite']];
+const TRAMITES=[
+  {t:'Consultar mi cita de inscripción',k:'cita turno hora dia cuando inscribo',go:1},
+  {t:'Ver mi proyección de materias',k:'proyeccion materias que me tocan plan estudios prioridad',go:1},
+  {t:'Buscar materias y grupos con cupo',k:'oferta buscar materia grupo cupo profesor horario nrc clave lugar',go:2},
+  {t:'Armar mi horario (Plan A y Plan B)',k:'horario plan respaldo armar planear traslape',go:3},
+  {t:'Inscribir mis materias',k:'inscribir inscripcion agregar materias hoja de trabajo',go:4},
+  {t:'Dar de baja una materia',k:'baja cancelar quitar materia curso',go:4},
+  {t:'Ver o imprimir mi horario',k:'imprimir horario comprobante ver',go:4},
+  {t:'Generar ficha o póliza de pago',k:'pago pagar ficha poliza referencia banco hsbc',go:5},
+  {t:'Ver el estado de mi pago',k:'estado pago voucher comprobante aplicado',go:5},
+  {t:'Reiniciar mi NIP',k:'nip contraseña password acceso',go:0},
+];
+const fmt=h=>String(h).padStart(2,'0')+':00';
+const sched=g=>g.d.join(' y ')+' '+fmt(g.s)+'–'+fmt(g.e);
+const clash=(a,b)=>a.nrc!==b.nrc&&a.d.some(x=>b.d.includes(x))&&a.s<b.e&&b.s<a.e;
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+let S, timer;
+function fresh(){
+  return {cond:'B',step:1,turn:false,banner:true,groups:BASE_GROUPS.map(g=>({...g})),plans:{A:[],B:[]},tab:'A',
+    filters:{m:'all',turno:'all',cupo:false,q:''},notice:null,modal:null,q:'',qOpen:false,
+    enroll:null,enrolled:[],pend:[],pay:{ch:null,stage:0,file:null,fileName:'',ok:false,cond100:false},
+    a:{rows:Array(10).fill(''),hoja:[],errs:[],pdf:false},
+    log:[],keys:0,errors:0,t0:Date.now()};
+}
+const G=n=>S.groups.find(g=>g.nrc===n);
+function log(msg,isErr){S.log.push(`${elapsed()} · ${msg}`);if(isErr)S.errors++;}
+function elapsed(){const s=Math.floor((Date.now()-S.t0)/1000);return Math.floor(s/60)+':'+String(s%60).padStart(2,'0');}
+function cupoPill(g){
+  if(g.cupo===0)return '<span class="pill bad"><i></i>Lleno</span>';
+  if(g.cupo<=5)return `<span class="pill warn"><i></i>Limitado · <span class="num">${g.cupo}</span> lugares</span>`;
+  return `<span class="pill ok"><i></i>Disponible · <span class="num">${g.cupo}</span> lugares</span>`;
+}
+function stepState(i){
+  if(i===1)return S.plans.A.length?'done':'';
+  if(i===2)return S.plans.A.length>=3?'done':'';
+  if(i===3)return S.plans.A.length?'done':'';
+  if(i===4)return S.enroll&&S.enroll.closed?'done':'';
+  if(i===5)return S.pay.stage>=3?'done':'';
+}
+function stepSub(i){
+  if(i===1)return S.turn?'Ya es tu turno':'Martes 18 nov · 10:30';
+  if(i===2)return `${S.groups.filter(g=>g.cupo>0).length} grupos con cupo`;
+  if(i===3)return `A: ${S.plans.A.length} · B: ${S.plans.B.length} materias`;
+  if(i===4)return S.enroll&&S.enroll.closed?`${S.enrolled.length} inscritas`:(S.turn?'Disponible ahora':'Desde tu cita');
+  if(i===5)return ['Sin generar','Ficha generada','Pago recibido','Pago aplicado'][S.pay.stage];
+}
+/* ---------------- render ---------------- */
+function render(){
+  document.getElementById('cA').setAttribute('aria-pressed',S.cond==='A');
+  document.getElementById('cB').setAttribute('aria-pressed',S.cond==='B');
+  const root=document.getElementById('root');
+  root.innerHTML=S.cond==='A'?renderA():renderB();
+  renderLog();
+}
+function renderB(){
+  const q=S.q.trim().toLowerCase();
+  const res=q?TRAMITES.filter(t=>(t.t+' '+t.k).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').split(/\s+/).some(w=>w.startsWith(q.normalize('NFD').replace(/[̀-ͯ]/g,'').split(' ')[0]))):[];
+  return `
+  <header class="app">
+    <div class="brand"><h1>Autoservicios · Inscripción</h1><small>Periodo Primavera 2027 · Reinscripción en línea</small></div>
+    <div class="search" role="search">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#5b6578" stroke-width="2.4" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
+      <input id="q" type="text" placeholder="¿Qué quieres hacer? Ej.: pagar, cita, baja" value="${esc(S.q)}" aria-label="Buscar un trámite" autocomplete="off">
+      ${S.qOpen&&q?`<ul>${res.length?res.map(t=>`<li><button data-act="goT" data-v="${t.go}" data-t="${esc(t.t)}">${esc(t.t)}<small>${t.go?'Paso '+t.go+': '+STEPS[t.go-1][0]:'Trámite fuera de la inscripción'}</small></button></li>`).join(''):'<li class="muted" style="padding:8px 10px">No encontramos ese trámite. Prueba con «pago», «horario» o «baja».</li>'}</ul>`:''}
+    </div>
+    <div class="user"><b>Alumna de ejemplo</b><br>Ing. en Ciencias de la Computación · 5.º semestre</div>
+  </header>
+  ${S.banner?`<div class="banner" role="status"><span><b>Mantenimiento programado:</b> sábado de 21:00 a 00:00 h. Tus planes quedan guardados.</span><button data-act="banner">Entendido</button></div>`:''}
+  <main>
+    <nav aria-label="Pasos de la inscripción"><ol class="stepper">
+      ${STEPS.map((s,i)=>`<li class="${S.step===i+1?'cur':stepState(i+1)}"><button data-act="step" data-v="${i+1}" ${S.step===i+1?'aria-current="step"':''}><span class="n">${stepState(i+1)==='done'&&S.step!==i+1?'✓':i+1}</span><span class="t"><b>${s[0]}</b><small>${stepSub(i+1)}</small></span></button></li>`).join('')}
+    </ol></nav>
+    ${[v1,v2,v3,v4,v5][S.step-1]()}
+  </main>
+  ${S.modal?renderModal():''}`;
+}
+function v1(){
+  const proj=Object.entries(MATERIAS);
+  return `<section class="grid2">
+    <div class="card">
+      <h2>Tu cita de inscripción</h2>
+      ${S.turn?`<div class="notice ok"><b>Ya es tu turno.</b><span>Puedes inscribir tu Plan A en el paso 4.</span></div>`:
+      `<dl class="kv"><dt>Día</dt><dd>Martes 18 de noviembre de 2026</dd><dt>Hora</dt><dd class="num">10:30 a 11:00 h</dd><dt>Estatus</dt><dd><span class="pill ok"><i></i>Inscripción permitida</span></dd></dl>
+      <p class="muted" style="margin:0">Antes de tu cita puedes revisar la oferta y guardar tus planes. Al llegar tu turno, inscribes el plan completo en un paso.</p>`}
+      <div class="row"><button class="btn" data-act="step" data-v="2">Ver la oferta de grupos</button>${S.turn?'':'<button class="btn ghost sm" data-act="turn">Simular: llegó mi turno</button>'}</div>
+    </div>
+    <div class="card">
+      <div class="row between"><h2>Tu proyección de materias</h2><span class="muted">${proj.length} materias</span></div>
+      <div class="tbl-wrap"><table><thead><tr><th>Materia</th><th>Prioridad <details class="help"><summary aria-label="¿Qué es la prioridad?">?</summary><div><b>Prioridad</b> indica el orden sugerido para inscribir según tu plan de estudios: 1 = materias de tu semestre, 2 = materias que puedes adelantar, 3 = optativas. <span class="muted">Texto de ejemplo; la definición oficial corresponde a la DAE.</span></div></details></th><th>En Plan A</th></tr></thead>
+      <tbody>${proj.map(([k,m])=>`<tr><td><span class="sw" style="background:${m.c}"></span>${m.n}</td><td class="num">${m.pr}</td><td>${S.plans.A.some(n=>G(n).m===k)?'<span class="pill ok">Sí</span>':'<span class="muted">—</span>'}</td></tr>`).join('')}</tbody></table></div>
+      <p class="muted" style="margin:0;font-size:.88rem">¿No aparece una materia que necesitas? <a href="#" data-act="help-proj">Solicita que se agregue a tu proyección</a>.</p>
+    </div>
+  </section>`;
+}
+function filtered(){
+  const f=S.filters,q=f.q.trim().toLowerCase();
+  return S.groups.filter(g=>(f.m==='all'||g.m===f.m)&&(f.turno==='all'||(f.turno==='m'?g.s<13:g.s>=13))&&(!f.cupo||g.cupo>0)&&
+    (!q||(MATERIAS[g.m].n+' '+g.p+' '+g.nrc).toLowerCase().includes(q)));
+}
+function v2(){
+  const f=S.filters, rows=filtered();
+  return `<section class="card">
+    <div class="row between"><h2>Oferta de grupos</h2><span class="muted">Cupo actualizado a las <span class="num">10:24</span> h</span></div>
+    <div class="filters">
+      <label for="fm">Materia<select id="fm" data-f="m"><option value="all">Todas mis materias</option>${Object.entries(MATERIAS).map(([k,m])=>`<option value="${k}" ${f.m===k?'selected':''}>${m.n}</option>`).join('')}</select></label>
+      <label for="ft">Turno<select id="ft" data-f="turno"><option value="all">Mañana y tarde</option><option value="m" ${f.turno==='m'?'selected':''}>Mañana (7:00 a 13:00)</option><option value="t" ${f.turno==='t'?'selected':''}>Tarde (13:00 a 21:00)</option></select></label>
+      <label for="fq">Profesor o NRC<input id="fq" type="text" data-f="q" value="${esc(f.q)}" placeholder="Ej.: Herrera o 10251"></label>
+      <label class="chk" for="fc"><input id="fc" type="checkbox" data-f="cupo" ${f.cupo?'checked':''}> Solo grupos con cupo</label>
+    </div>
+    ${S.notice?noticeHtml(S.notice):''}
+    <div class="tbl-wrap"><table>
+      <thead><tr><th>Materia</th><th>NRC</th><th>Profesor (ejemplo)</th><th>Horario</th><th>Cupo</th><th>Agregar a</th></tr></thead>
+      <tbody>${rows.length?rows.map(g=>{const inA=S.plans.A.includes(g.nrc),inB=S.plans.B.includes(g.nrc);return `<tr class="${g.cupo===0?'full':''}">
+        <td><span class="sw" style="background:${MATERIAS[g.m].c}"></span>${MATERIAS[g.m].n}<br><button class="btn ghost sm" style="margin-top:4px" data-act="ficha" data-v="${g.nrc}">Ficha del grupo</button></td>
+        <td class="num">${g.nrc}</td><td>${g.p}</td><td class="num">${sched(g)}</td><td>${cupoPill(g)}</td>
+        <td><div class="row">${g.cupo===0?'<span class="muted" style="font-size:.88rem">Sin lugares</span>':`
+          <button class="btn sm ${inA?'':'sec'}" data-act="add" data-p="A" data-v="${g.nrc}" ${inA?'aria-pressed="true"':''}>${inA?'✓ Plan A':'+ Plan A'}</button>
+          <button class="btn sm ${inB?'':'sec'}" data-act="add" data-p="B" data-v="${g.nrc}" ${inB?'aria-pressed="true"':''}>${inB?'✓ Plan B':'+ Plan B'}</button>`}</div></td></tr>`;}).join(''):'<tr><td colspan="6" class="muted">Ningún grupo coincide con los filtros. Quita «Solo grupos con cupo» o cambia el turno.</td></tr>'}</tbody>
+    </table></div>
+    <div class="row between"><span class="muted">Plan A: <b class="num">${S.plans.A.length}</b> materias · Plan B: <b class="num">${S.plans.B.length}</b> materias</span><button class="btn" data-act="step" data-v="3">Revisar mis planes</button></div>
+  </section>`;
+}
+function noticeHtml(n){
+  return `<div class="notice ${n.kind}" role="alert"><b>${n.title}</b><span>${n.body}</span>${n.code?`<code>Código del sistema: ${n.code}</code>`:''}${n.actions?`<div class="row">${n.actions}</div>`:''}</div>`;
+}
+function week(nrcs,opt={}){
+  const H0=7,H1=21,hours=H1-H0;
+  const gs=nrcs.map(G);
+  return `<div class="week" style="--hours:${hours}" role="img" aria-label="Horario semanal">
+    <div class="hd"></div>${DAYS.map(d=>`<div class="hd">${DAYN[d]}</div>`).join('')}
+    <div class="hrs">${Array.from({length:hours},(_,i)=>`<span style="top:${i*30+6}px" class="num">${H0+i}</span>`).join('')}</div>
+    ${DAYS.map(d=>`<div class="col">${gs.filter(g=>g.d.includes(d)).map(g=>{const c=gs.some(o=>clash(g,o));return `<div class="blk ${c?'clash':''}" style="top:${(g.s-H0)*30+1}px;height:${(g.e-g.s)*30-2}px;background:${MATERIAS[g.m].c}">${MATERIAS[g.m].n.replace(' (optativa)','')}<small class="num">${g.nrc} · ${fmt(g.s)}–${fmt(g.e)}${opt.status&&opt.status[g.nrc]?' · '+opt.status[g.nrc]:''}</small></div>`;}).join('')}</div>`).join('')}
+  </div>`;
+}
+function v3(){
+  const p=S.tab, list=S.plans[p], clashes=list.filter(n=>list.some(o=>clash(G(n),G(o))));
+  const missing=Object.keys(MATERIAS).filter(k=>MATERIAS[k].pr===1&&!list.some(n=>G(n).m===k));
+  return `<section class="card">
+    <div class="row between"><h2>Mis planes de horario</h2>
+      <div class="tabs" role="tablist">${['A','B'].map(x=>`<button role="tab" aria-selected="${S.tab===x}" data-act="tab" data-v="${x}">Plan ${x} · ${S.plans[x].length}</button>`).join('')}</div></div>
+    ${list.length?`
+      ${clashes.length?`<div class="notice bad" role="alert"><b>Dos materias de tu Plan ${p} coinciden en horario.</b><span>Cambia uno de los grupos marcados en rojo antes de tu cita.</span></div>`:
+        `<div class="notice ok"><b>Plan ${p} sin traslapes.</b><span>${missing.length?'Te falta agregar: '+missing.map(k=>MATERIAS[k].n).join(', ')+'.':'Incluye todas tus materias de prioridad 1.'}</span></div>`}
+      <div class="grid2" style="grid-template-columns:2fr 1fr">
+        <div class="tbl-wrap">${week(list)}</div>
+        <ul class="list">${list.map(n=>{const g=G(n);return `<li><span><span class="sw" style="background:${MATERIAS[g.m].c}"></span><b>${MATERIAS[g.m].n}</b><br><span class="muted num">NRC ${g.nrc} · ${sched(g)}</span></span><span class="row">${cupoPill(g)}<button class="btn ghost sm" data-act="rm" data-p="${p}" data-v="${n}" aria-label="Quitar ${MATERIAS[g.m].n} del Plan ${p}">Quitar</button></span></li>`;}).join('')}</ul>
+      </div>`:
+      `<div class="notice info"><b>Tu Plan ${p} está vacío.</b><span>Agrega grupos desde la oferta. ${p==='B'?'El Plan B es tu respaldo por si un grupo se llena.':''}</span></div>`}
+    <div class="row between"><button class="btn sec" data-act="step" data-v="2">Agregar grupos</button><button class="btn" data-act="step" data-v="4" ${S.plans.A.length?'':'disabled'}>Ir a inscribir</button></div>
+  </section>`;
+}
+function v4(){
+  if(!S.turn)return `<section class="card"><h2>Inscribir</h2><div class="notice info"><b>Tu turno empieza el martes 18 de noviembre a las 10:30 h.</b><span>Mientras tanto, revisa que tu Plan A no tenga traslapes. Al llegar tu turno, este paso se habilita solo.</span></div><div class="row"><button class="btn ghost sm" data-act="turn">Simular: llegó mi turno</button></div></section>`;
+  if(!S.enroll){
+    const list=S.plans.A;
+    return `<section class="card"><div class="row between"><h2>Es tu turno de inscribir</h2><span class="pill ok"><i></i>Turno activo hasta las 11:00 h</span></div>
+      ${list.length?`<p style="margin:0">Se inscribirán las <b class="num">${list.length}</b> materias de tu Plan A. Si un grupo se llena, te mostraremos alternativas antes de hacer cualquier cambio.</p>
+      <div class="tbl-wrap">${week(list)}</div>
+      <div class="row"><button class="btn" data-act="enroll">Inscribir Plan A</button><button class="btn sec" data-act="step" data-v="3">Revisar planes</button></div>`:
+      `<div class="notice warn"><b>Tu Plan A está vacío.</b><span>Agrega grupos desde la oferta para poder inscribir.</span></div><div class="row"><button class="btn" data-act="step" data-v="2">Ir a la oferta</button></div>`}</section>`;
+  }
+  const E=S.enroll;
+  const status={};S.enrolled.forEach(n=>status[n]='Inscrita');
+  return `<section class="card">
+    <div class="row between"><h2>Resultado de tu inscripción</h2>${E.closed?'<span class="pill ok"><i></i>Inscripción concluida</span>':''}</div>
+    <ul class="list">${E.items.map(it=>{const g=G(it.nrc);
+      if(it.st==='ok')return `<li><span><span class="sw" style="background:${MATERIAS[g.m].c}"></span><b>${MATERIAS[g.m].n}</b><br><span class="muted num">NRC ${g.nrc} · ${sched(g)}</span></span><span class="pill ok">✓ Inscrita</span></li>`;
+      if(it.st==='pend')return `<li><span><b>${MATERIAS[g.m].n}</b><br><span class="muted">Pendiente: solicitaste apoyo a la Secretaría Académica</span></span><span class="pill warn">Pendiente</span></li>`;
+      const alts=S.groups.filter(a=>a.m===g.m&&a.cupo>0&&!S.enrolled.some(n=>clash(a,G(n))));
+      const bAlt=S.plans.B.map(G).find(a=>a.m===g.m&&a.cupo>0&&!S.enrolled.some(n=>clash(a,G(n))));
+      return `<li style="display:grid"><div class="notice bad" role="alert"><b>${MATERIAS[g.m].n}: el grupo ${g.nrc} se llenó antes de tu inscripción.</b>
+        <span>Tus demás materias no cambiaron. Elige una de estas opciones; nada se inscribe sin tu confirmación.</span><code>Código del sistema: CLOSED SECTION</code>
+        <div class="row">${bAlt?`<button class="btn sm" data-act="useB" data-from="${g.nrc}" data-v="${bAlt.nrc}">Usar el grupo de mi Plan B (${bAlt.nrc} · ${sched(bAlt)})</button>`:''}
+        ${alts.filter(a=>!bAlt||a.nrc!==bAlt.nrc).map(a=>`<button class="btn sm sec" data-act="alt" data-from="${g.nrc}" data-v="${a.nrc}">Inscribir ${a.nrc} · ${sched(a)} · ${a.cupo} lugares</button>`).join('')}
+        ${alts.length?'':'<span class="muted">No hay grupos de esta materia compatibles con tu horario.</span>'}
+        <button class="btn sm ghost" data-act="pend" data-v="${g.nrc}">Dejar pendiente y pedir apoyo</button></div></div></li>`;}).join('')}</ul>
+    ${E.closed?`<h3>Tu horario inscrito</h3><div class="tbl-wrap">${week(S.enrolled,{status})}</div>
+      <div class="row"><button class="btn" data-act="step" data-v="5">Continuar al pago</button><button class="btn sec" data-act="comprobante">Ver comprobante de inscripción</button><button class="btn ghost sm" data-act="baja">Dar de baja una materia</button></div>`:''}
+  </section>`;
+}
+function v5(){
+  const P=S.pay, ref='RIN-2027-0458-3192';
+  const stages=[['Ficha generada','Referencia lista'],['Pago recibido','Comprobante o aviso del banco'],['Pago aplicado','Inscripción confirmada']];
+  if(!(S.enroll&&S.enroll.closed))return `<section class="card"><h2>Pago</h2><div class="notice info"><b>Primero concluye tu inscripción.</b><span>El monto y la ficha se generan con tus materias inscritas.</span></div><div class="row"><button class="btn" data-act="step" data-v="4">Ir a inscribir</button></div></section>`;
+  return `<section class="grid2">
+    <div class="card">
+      <h2>Tu póliza de reinscripción</h2>
+      <dl class="kv"><dt>Concepto</dt><dd>Reinscripción Primavera 2027</dd><dt>Monto</dt><dd class="num">$1,000.00 MXN (ejemplo)</dd><dt>Fecha límite</dt><dd>Martes 25 de noviembre de 2026</dd>${P.stage>=1?`<dt>Referencia</dt><dd class="num">${ref}</dd>`:''}</dl>
+      ${P.stage===0?`
+        <label class="chk" for="c100"><input type="checkbox" id="c100" data-act="cond100" ${P.cond100?'checked':''}> Tengo condonación del 100 % <details class="help"><summary aria-label="Qué es la condonación">?</summary><div>Si tu condonación cubre el total, solo confirmas tu póliza aquí y no necesitas acudir al banco.</div></details></label>
+        ${P.cond100?`<button class="btn" data-act="confirm100">Confirmar mi póliza sin pago</button>`:`
+        <fieldset style="border:0;padding:0;margin:0;display:grid;gap:8px"><legend style="font-weight:700;margin-bottom:6px">¿Cómo vas a pagar?</legend>
+          <label class="chk"><input type="radio" name="ch" data-act="ch" value="ficha" ${P.ch==='ficha'?'checked':''}> Ventanilla bancaria con ficha <span class="muted">(subes tu comprobante después)</span></label>
+          <label class="chk"><input type="radio" name="ch" data-act="ch" value="linea" ${P.ch==='linea'?'checked':''}> Transferencia o pago en línea con referencia <span class="pill info">Propuesta P3</span></label>
+        </fieldset>
+        <button class="btn" data-act="genficha" ${P.ch?'':'disabled'}>${P.ch==='linea'?'Generar referencia y pagar':'Generar ficha de pago'}</button>`}`:''}
+      ${P.stage===1&&P.ch==='ficha'?`
+        <div class="notice info"><b>Paga en ventanilla antes del 25 de noviembre.</b><span>Lleva la referencia <b class="num">${ref}</b>. Después, sube una foto o PDF del comprobante donde se lea completa.</span></div>
+        <label for="up" style="font-weight:700">Comprobante de pago</label><input id="up" type="file" accept="image/*,application/pdf" data-act="file">
+        ${P.file?`<div class="row">${P.file.startsWith('data:image')?`<img class="preview" src="${P.file}" alt="Vista previa del comprobante">`:`<span class="pill info">PDF: ${esc(P.fileName)}</span>`}</div>
+          <label class="chk" for="okref"><input type="checkbox" id="okref" data-act="okref" ${P.ok?'checked':''}> La referencia ${ref} se lee completa en el comprobante</label>`:''}
+        <button class="btn" data-act="send" ${P.file&&P.ok?'':'disabled'}>Enviar comprobante</button>
+        ${P.file&&!P.ok?'<span class="muted" style="font-size:.88rem">Confirma que la referencia se lee completa para enviar. Así evitamos rechazos.</span>':''}`:''}
+      ${P.stage===2?`<div class="notice warn"><b>Recibimos tu comprobante.</b><span>Lo revisamos en un máximo de 2 días hábiles (ejemplo). Te avisaremos a tu correo institucional cuando se aplique.</span></div><button class="btn ghost sm" data-act="apply">Simular: la universidad aplicó el pago</button>`:''}
+      ${P.stage===3?`<div class="notice ok"><b>Pago aplicado. Tu inscripción está confirmada.</b><span>Enviamos el aviso a tu correo institucional (simulado).</span></div><button class="btn sec" data-act="comprobante">Ver comprobante de inscripción</button>`:''}
+    </div>
+    <div class="card">
+      <h2>Estado de tu pago</h2>
+      <ol class="timeline">${stages.map((s,i)=>`<li class="${P.stage>i?'on':''}"><span></span><b>${s[0]}</b><small>${P.stage>i?'✓ '+['Hoy 10:52','Hoy 11:05','Hoy 11:20'][i]:s[1]}</small></li>`).join('')}</ol>
+      <p class="muted" style="margin:0">Última actualización: hoy, <span class="num">${['10:40','10:52','11:05','11:20'][P.stage]}</span> h. Este estado se ve también desde la pantalla de inicio.</p>
+    </div>
+  </section>`;
+}
+function renderModal(){
+  const M=S.modal;let body='';
+  if(M.type==='ficha'){const g=G(M.v);body=`<h2>${MATERIAS[g.m].n} · ${g.g}</h2>
+    <dl class="kv"><dt>NRC</dt><dd class="num">${g.nrc}</dd><dt>Profesor</dt><dd>${g.p} (ejemplo)</dd><dt>Horario</dt><dd class="num">${sched(g)}</dd><dt>Salón</dt><dd>${g.salon}</dd><dt>Modalidad</dt><dd>Presencial</dd><dt>Evaluación</dt><dd>Exámenes 50 %, proyecto 30 %, prácticas 20 % (ejemplo)</dd><dt>Programa</dt><dd><a href="#" data-act="noop">Programa de la materia (PDF de ejemplo)</a></dd><dt>Cupo</dt><dd>${cupoPill(g)}</dd></dl>
+    <p class="muted" style="margin:0;font-size:.88rem">La ficha muestra información institucional del grupo. No incluye calificaciones de profesores.</p>`;}
+  if(M.type==='confirmB'){const g=G(M.v),f=G(M.from);body=`<h2>¿Cambiar al grupo de tu Plan B?</h2><p style="margin:0">Se inscribirá <b>${MATERIAS[g.m].n}</b> en el grupo <b class="num">${g.nrc}</b> (${sched(g)}) en lugar del ${f.nrc}, que se llenó. Tus demás materias no cambian.</p>
+    <div class="row"><button class="btn" data-act="doAlt" data-from="${f.nrc}" data-v="${g.nrc}">Sí, inscribir ${g.nrc}</button><button class="btn sec" data-act="close">Cancelar</button></div>`;}
+  if(M.type==='comprobante'){body=`<h2>Comprobante de inscripción</h2><p class="muted" style="margin:0">Primavera 2027 · Alumna de ejemplo · Pago: ${['sin generar','ficha generada','recibido','aplicado'][S.pay.stage]}</p>
+    <div class="tbl-wrap"><table><thead><tr><th>NRC</th><th>Materia</th><th>Horario</th></tr></thead><tbody>${S.enrolled.map(n=>{const g=G(n);return `<tr><td class="num">${g.nrc}</td><td>${MATERIAS[g.m].n}</td><td class="num">${sched(g)}</td></tr>`;}).join('')}</tbody></table></div>`;}
+  if(M.type==='info'){body=`<h2>${M.title}</h2><p style="margin:0">${M.body}</p>`;}
+  return `<div class="overlay" data-act="close"><div class="modal" role="dialog" aria-modal="true">${body}${M.type!=='confirmB'?'<div class="row"><button class="btn sec" data-act="close">Cerrar</button></div>':''}</div></div>`;
+}
+/* ---------------- Condición A ---------------- */
+function renderA(){
+  const A=S.a;
+  return `<div class="legacy">
+    <h2>Agregar Clases a la Hoja de Trabajo</h2>
+    <p>Para agregar una clase, introduzca el número de referencia del curso (NRC) en las casillas de abajo. Al terminar presione Enviar Cambios. Consulte la oferta en el <a data-act="pdf">PDF de horarios del periodo</a>.</p>
+    <p><b>Hoja de trabajo actual</b></p>
+    <table><tr><th>Estado</th><th>NRC</th><th>Materia</th><th>Grupo</th><th>Hrs</th></tr>
+      ${A.hoja.length?A.hoja.map(n=>{const g=G(n);return `<tr><td>**Web Registered**</td><td>${g.nrc}</td><td>${g.m}${g.nrc%100}</td><td>${g.g}</td><td>${g.e-g.s}</td></tr>`;}).join(''):'<tr><td colspan="5">Ninguna</td></tr>'}</table>
+    ${A.errs.length?`<p><b>Errores de Agregar Clase</b></p><table class="err"><tr><th>Estado</th><th>NRC</th><th>Materia</th></tr>${A.errs.map(e=>`<tr><td>${e.code}</td><td>${esc(e.nrc)}</td><td>${e.m||''}</td></tr>`).join('')}</table>`:''}
+    <p><b>Agregar Clases a la Hoja de Trabajo</b></p>
+    <table><tr><th colspan="10">NRC</th></tr><tr>${A.rows.map((v,i)=>`<td><input id="nrc${i}" data-a="${i}" value="${esc(v)}" aria-label="NRC ${i+1}" inputmode="numeric"></td>`).join('')}</tr></table>
+    <p><button class="lbtn" data-act="submitA">Enviar Cambios</button> <button class="lbtn" data-act="clearA">Restablecer</button> <button class="lbtn" data-act="pdf">Buscar Clase</button></p>
+    ${A.pdf?`<pre>HORARIOS PRIMAVERA 2027 - ING. EN CIENCIAS DE LA COMPUTACION
+NRC    MATERIA  GPO  DIAS   HORA         PROFESOR
+${S.groups.map(g=>`${g.nrc}  ${(g.m+(g.nrc%100)).padEnd(7)}  ${g.g}   ${g.d.join('').padEnd(5)}  ${String(g.s*100).padStart(4,'0')}-${String(g.e*100).padStart(4,'0')}    ${g.p.toUpperCase()}`).join('\n')}
+
+CLAVES: ISW=ING. SOFTWARE  BDA=BASES DE DATOS AV.  RED=REDES  SOP=SIST. OPERATIVOS
+        PYE=PROBABILIDAD Y EST.  IHC=INTERACCION H-C (OPTATIVA)</pre>`:''}
+  </div>`;
+}
+function submitA(){
+  const A=S.a, vals=A.rows.map(v=>v.trim()).filter(Boolean);
+  A.errs=[];
+  vals.forEach(v=>{
+    S.keys++;
+    const g=G(Number(v));
+    if(!g){A.errs.push({code:'INVALID CRN',nrc:v});log(`A: NRC inválido ${v}`,true);return;}
+    if(A.hoja.includes(g.nrc)||A.hoja.some(n=>G(n).m===g.m)){A.errs.push({code:'RPT HRS EXCEED 1',nrc:v,m:g.m});log(`A: materia repetida ${v}`,true);return;}
+    if(A.hoja.length>=6){A.errs.push({code:'MAXIMUN HOURS EXCEED',nrc:v,m:g.m});log(`A: máximo de horas ${v}`,true);return;}
+    if(g.cupo===0||g.fills){g.cupo=0;A.errs.push({code:'CLOSED SECTION',nrc:v,m:g.m});log(`A: grupo cerrado ${v}`,true);return;}
+    const c=A.hoja.map(G).find(o=>clash(g,o));
+    if(c){A.errs.push({code:'TIME CONFLICT WITH '+c.nrc,nrc:v,m:g.m});log(`A: traslape ${v} con ${c.nrc}`,true);return;}
+    A.hoja.push(g.nrc);g.cupo--;log(`A: inscrito ${v}`);
+  });
+  A.rows=Array(10).fill('');
+}
+/* ---------------- acciones ---------------- */
+function addTo(p,n){
+  const g=G(n),plan=S.plans[p];
+  if(plan.includes(n)){S.plans[p]=plan.filter(x=>x!==n);S.notice=null;log(`Quitó ${n} del Plan ${p}`);return;}
+  const same=plan.find(x=>G(x).m===g.m);
+  const others=plan.filter(x=>x!==same);
+  const c=others.map(G).find(o=>clash(g,o));
+  if(c){
+    const alts=S.groups.filter(a=>a.m===g.m&&a.cupo>0&&a.nrc!==n&&!others.some(o=>clash(a,G(o))));
+    S.notice={kind:'bad',title:`${MATERIAS[g.m].n} (${g.nrc}) coincide en horario con ${MATERIAS[c.m].n} (${c.nrc}).`,
+      body:`Ambas son ${DAYN[g.d.find(d=>c.d.includes(d))].toLowerCase()} a las ${fmt(Math.max(g.s,c.s))}. Elige otro grupo o agrégalo a tu otro plan.`,code:'TIME CONFLICT WITH '+c.nrc,
+      actions:alts.map(a=>`<button class="btn sm sec" data-act="add" data-p="${p}" data-v="${a.nrc}">Usar ${a.nrc} · ${sched(a)}</button>`).join('')+(p==='A'?`<button class="btn sm ghost" data-act="add" data-p="B" data-v="${n}">Agregar ${n} al Plan B</button>`:'')};
+    log(`Traslape al agregar ${n} al Plan ${p}`,true);return;
+  }
+  S.plans[p]=[...others,n];
+  S.notice={kind:'ok',title:same?`Cambiaste ${MATERIAS[g.m].n} al grupo ${n} en tu Plan ${p}.`:`${MATERIAS[g.m].n} (${n}) quedó en tu Plan ${p}.`,body:`Plan ${p}: ${S.plans[p].length} materias, sin traslapes.`};
+  log(`Agregó ${n} al Plan ${p}`);
+}
+function enroll(){
+  S.enroll={items:[],closed:false};S.enrolled=[];
+  S.plans.A.forEach(n=>{const g=G(n);
+    if(g.fills||g.cupo===0){g.cupo=0;g.fills=false;S.enroll.items.push({nrc:n,st:'full'});log(`Grupo lleno al inscribir ${n}`);}
+    else{g.cupo--;S.enrolled.push(n);S.enroll.items.push({nrc:n,st:'ok'});}
+  });
+  log('Inscribió Plan A');closeIf();
+}
+function closeIf(){if(S.enroll&&S.enroll.items.every(i=>i.st!=='full'))S.enroll.closed=true;}
+function resolveAlt(from,to){const it=S.enroll.items.find(i=>i.nrc===from);const g=G(to);g.cupo--;S.enrolled.push(to);it.nrc=to;it.st='ok';log(`Resolvió grupo lleno con ${to}`);closeIf();}
+document.addEventListener('click',e=>{
+  const el=e.target.closest('[data-act]');if(!el)return;
+  const a=el.dataset.act,v=el.dataset.v;
+  if(el.tagName==='A')e.preventDefault();
+  if(['ch','cond100','okref','file'].includes(a))return;
+  if(a==='overlay')return;
+  switch(a){
+    case 'cond':S.cond=v;log('Cambió a condición '+v);break;
+    case 'reset':S=fresh();break;
+    case 'step':S.step=+v;S.notice=null;S.qOpen=false;window.scrollTo(0,0);break;
+    case 'goT':S.q='';S.qOpen=false;log('Buscador: '+el.dataset.t);if(+v===0){S.modal={type:'info',title:'Reiniciar mi NIP',body:'Este trámite se solicita a la Secretaría Académica de tu unidad. En la propuesta, el enlace a la solicitud aparece aquí mismo (texto de ejemplo).'};}else{S.step=+v;}break;
+    case 'banner':S.banner=false;break;
+    case 'turn':S.turn=true;log('Llegó el turno (simulado)');break;
+    case 'ficha':S.modal={type:'ficha',v:+v};log('Abrió ficha '+v);break;
+    case 'add':addTo(el.dataset.p,+v);break;
+    case 'rm':S.plans[el.dataset.p]=S.plans[el.dataset.p].filter(x=>x!==+v);log(`Quitó ${v} del Plan ${el.dataset.p}`);break;
+    case 'tab':S.tab=v;break;
+    case 'enroll':enroll();break;
+    case 'useB':S.modal={type:'confirmB',v:+v,from:+el.dataset.from};break;
+    case 'doAlt':resolveAlt(+el.dataset.from,+v);S.modal=null;break;
+    case 'alt':resolveAlt(+el.dataset.from,+v);break;
+    case 'pend':S.enroll.items.find(i=>i.nrc===+v).st='pend';log('Dejó pendiente '+v);closeIf();break;
+    case 'comprobante':S.modal={type:'comprobante'};break;
+    case 'baja':S.modal={type:'info',title:'Dar de baja una materia',body:'Elige la materia en tu comprobante. Antes de confirmar, el sistema te muestra cómo queda tu horario y tu póliza, y puedes deshacer la baja durante 24 horas (propuesta del hallazgo 3).'};break;
+    case 'help-proj':S.modal={type:'info',title:'Agregar una materia a tu proyección',body:'Envía la solicitud desde aquí; la Secretaría Académica la revisa y te avisa por correo institucional (texto de ejemplo para la prueba).'};break;
+    case 'genficha':if(S.pay.ch==='linea'){S.pay.stage=3;log('Pagó en línea (simulado)');}else{S.pay.stage=1;log('Generó ficha');}break;
+    case 'confirm100':S.pay.stage=3;log('Confirmó póliza con condonación');break;
+    case 'send':S.pay.stage=2;log('Envió comprobante');break;
+    case 'apply':S.pay.stage=3;log('Pago aplicado (simulado)');break;
+    case 'close':if(el.classList.contains('overlay')&&e.target!==el)return;S.modal=null;break;
+    case 'pdf':S.a.pdf=!S.a.pdf;log('A: abrió la oferta en PDF');break;
+    case 'submitA':submitA();break;
+    case 'clearA':S.a.rows=Array(10).fill('');break;
+    case 'copylog':{const t=`Condición ${S.cond} · tiempo ${elapsed()} · NRC tecleados ${S.keys} · errores ${S.errors}\n`+S.log.join('\n');
+      navigator.clipboard.writeText(t).then(()=>{document.getElementById('copyMsg').textContent='Copiado';},()=>{document.getElementById('copyMsg').textContent='No se pudo copiar';});return;}
+    case 'noop':return;
+    default:return;
+  }
+  render();
+});
+document.addEventListener('change',e=>{
+  const el=e.target;
+  if(el.dataset.f){S.filters[el.dataset.f]=el.type==='checkbox'?el.checked:el.value;S.notice=null;render();return;}
+  const a=el.dataset.act;
+  if(a==='ch'){S.pay.ch=el.value;render();}
+  if(a==='cond100'){S.pay.cond100=el.checked;render();}
+  if(a==='okref'){S.pay.ok=el.checked;render();}
+  if(a==='file'&&el.files[0]){const f=el.files[0];S.pay.fileName=f.name;S.pay.ok=false;
+    if(f.size>5e6){S.pay.file=null;S.modal={type:'info',title:'Archivo muy grande',body:'El comprobante debe pesar menos de 5 MB. Toma la foto de nuevo o reduce su tamaño.'};log('Comprobante rechazado por tamaño',true);render();return;}
+    const r=new FileReader();r.onload=()=>{S.pay.file=r.result;log('Cargó comprobante');render();};r.readAsDataURL(f);}
+});
+document.addEventListener('input',e=>{
+  const el=e.target;
+  if(el.id==='q'){S.q=el.value;S.qOpen=true;const pos=el.selectionStart;render();const n=document.getElementById('q');n.focus();n.setSelectionRange(pos,pos);}
+  if(el.dataset.f==='q'){S.filters.q=el.value;const pos=el.selectionStart;render();const n=document.getElementById('fq');n.focus();n.setSelectionRange(pos,pos);}
+  if(el.dataset.a!==undefined){S.a.rows[+el.dataset.a]=el.value;}
+});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&(S.modal||S.qOpen)){S.modal=null;S.qOpen=false;render();}});
+function renderLog(){
+  document.getElementById('stT').textContent=elapsed();
+  document.getElementById('stK').textContent=S.keys;
+  document.getElementById('stE').textContent=S.errors;
+  document.getElementById('stLog').innerHTML=S.log.slice(-8).map(l=>`<li>${esc(l)}</li>`).join('');
+}
+S=fresh();render();
+setInterval(()=>{const t=document.getElementById('stT');if(t)t.textContent=elapsed();},1000);
+</script>
+</body>
+</html>
